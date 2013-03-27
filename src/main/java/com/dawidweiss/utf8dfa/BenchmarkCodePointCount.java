@@ -205,41 +205,13 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
 
     public static void main(String [] args)
     {
-        byte[] utf8CodeLength = new byte[] {
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-            3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-            4, 4, 4, 4, 4, 4, 4, 4 //, 5, 5, 5, 5, 6, 6, 0, 0
-          };
-        
-        for (int i = 0; i < utf8CodeLength.length; i++) {
-            System.out.println(String.format(
-                "%3d %8s %8s => %8s %d",
-                i,
-                Integer.toBinaryString(i),
-                Integer.toBinaryString(utf8CodeLength[i] & 0xff),
-                Integer.toBinaryString((~i) & 0xff),
-                Integer.numberOfLeadingZeros((~i) & 0xff)
-                ));
-        }
-        
+        // Sanity check.
         System.out.println("Lucene: " + countLucene(1, DATA_UNICODE));
         System.out.println("Java: " + countJava(1, DATA_UNICODE));
         System.out.println("NoLookup(if): " + noLookupIf(1, DATA_UNICODE));
         System.out.println("NoLookup(switch): " + noLookupSwitch(1, DATA_UNICODE));
 
+        // Benchmark.
         Runner.main(BenchmarkCodePointCount.class, args);
     }
 }
