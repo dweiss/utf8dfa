@@ -26,7 +26,8 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         LUCENE, 
         LUCENE_MOD1,
         JAVA,
-        NOLOOKUP_IF
+        NOLOOKUP_IF,
+        NO_COUNT
     }
 
     public enum DataType
@@ -81,6 +82,9 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
                 
             case LUCENE_MOD1:
                 return guard = countLuceneMod1(reps, data);
+                
+            case NO_COUNT:
+                return guard = countNoCount(reps, data);
         }
 
         throw new RuntimeException();
@@ -144,6 +148,19 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         return codePoints;
     }
 
+
+    private static int countNoCount(int reps, byte [] data)
+    {
+        int codePoints = 0;
+        for (int i = 0; i < reps; i++)
+        {
+            for (int j = 0; j < data.length; j++) {
+                codePoints += data[j] & 0xFF;
+            }
+        }
+        return codePoints;
+    }
+
     /**
      * No lookup array, if sequence. 
      */
@@ -176,75 +193,42 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
       return codePointCount;
     }
 
-    /**
+    /** 
+     * Returns the number of code points in this UTF8 sequence.
+     * 
+     * <p>This method assumes valid UTF8 input, the result will be invalid
+     * or an assertion will be thrown on invalid UTF8 sequences. This method does *not* perform
+     * full UTF8 validation, it will check only the first byte of each codepoint (for
+     * multi-byte sequences any bytes after the head are skipped). 
+     * 
+     * @throws AssertionError If invalid codepoint header byte occurs or the content is 
+     * prematurely truncated.
      */
-    public static int countLuceneMod1(BytesRef utf8) {
-      int upto = utf8.offset;
-      final int limit = utf8.offset + utf8.length;
-      final byte[] bytes = utf8.bytes;
-      int codePointCount = 0;
-      while (upto < limit) {
-        codePointCount++;
-        switch (Integer.numberOfLeadingZeros((~bytes[upto]) & 0xFF) - 24) {
-            case 0:
-                upto += 1; break;
-            case 2:
-                upto += 2; break;
-            case 3:
-                upto += 3; break;
-            case 4:
-                upto += 4; break;
-            default:
-                // invalid.
-                throw new RuntimeException("Invalid." + Integer.toHexString(bytes[upto]));
-        }
-      }
-      return codePointCount;
-    }
-
-    static byte[] utf8CodeLength = new byte[] {
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-      2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-      3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-      4, 4, 4, 4, 4, 4, 4, 4 //, 5, 5, 5, 5, 6, 6, 0, 0
-    };
-
-    /** Returns the number of code points in this utf8
-     *  sequence.  Behavior is undefined if the utf8 sequence
-     *  is invalid.*/
     public static int codePointCount(BytesRef utf8) {
-      int upto = utf8.offset;
-      final int limit = utf8.offset + utf8.length;
+      int pos = utf8.offset;
+      final int limit = pos + utf8.length;
       final byte[] bytes = utf8.bytes;
+
       int codePointCount = 0;
-      
-      int v;
-      while (upto < limit) {
-        codePointCount++;
-        
-        v = bytes[upto] & 0xFF;
-        if (v < 128) {
-            upto++;
-            continue;
-        } else {
-            upto += utf8CodeLength[v];
+      for (; pos < limit; codePointCount++) {
+        int v = bytes[pos] & 0xFF;
+        if (v <   /* 0xxx xxxx */ 0x80) { pos += 1; continue; }
+        if (v >=  /* 110x xxxx */ 0xc0) {
+          if (v < /* 111x xxxx */ 0xe0) { pos += 2; continue; } 
+          if (v < /* 1111 xxxx */ 0xf0) { pos += 3; continue; } 
+          if (v < /* 1111 1xxx */ 0xf8) { pos += 4; continue; }
+          // fallthrough, consider 5 and 6 byte sequences invalid. 
         }
+
+        // Anything not covered above is invalid UTF8.
+        assert false : "Invalid UTF8: " + utf8.toString();
       }
+
+      // Check if we didn't go over the limit on the last character.
+      assert pos <= limit : "Invalid UTF8: " + utf8.toString();
       return codePointCount;
     }
-    
+
     public static void main(String [] args)
     {
         // Sanity check.
@@ -252,6 +236,7 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         System.out.println("Java: " + countJava(1, DATA_UNICODE));
         System.out.println("NoLookup(if): " + noLookupIf(1, DATA_UNICODE));
         System.out.println("LuceneMod1: " + countLuceneMod1(1, DATA_UNICODE));
+        System.out.println("NoCount: " + countNoCount(1, DATA_UNICODE));
 
         // Benchmark.
         Runner.main(BenchmarkCodePointCount.class, args);
