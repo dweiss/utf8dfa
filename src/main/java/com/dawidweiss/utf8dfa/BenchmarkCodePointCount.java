@@ -24,9 +24,9 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
     public enum Implementation
     {
         LUCENE, 
+        LUCENE_MOD1,
         JAVA,
-        NOLOOKUP_IF,
-        NOLOOKUP_SWITCH
+        NOLOOKUP_IF
     }
 
     public enum DataType
@@ -79,8 +79,8 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
             case NOLOOKUP_IF:
                 return guard = noLookupIf(reps, data);
                 
-            case NOLOOKUP_SWITCH:
-                return guard = noLookupSwitch(reps, data);
+            case LUCENE_MOD1:
+                return guard = countLuceneMod1(reps, data);
         }
 
         throw new RuntimeException();
@@ -133,13 +133,13 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         return codePoints;
     }
 
-    private static int noLookupSwitch(int reps, byte [] data)
+    private static int countLuceneMod1(int reps, byte [] data)
     {
         int codePoints = 0;
         BytesRef bref = new BytesRef(data);
         for (int i = 0; i < reps; i++)
         {
-            codePoints += noLookupCodePointCountSwitch(bref);
+            codePoints += codePointCount(bref);
         }
         return codePoints;
     }
@@ -177,9 +177,8 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
     }
 
     /**
-     * no lookup array, switch. for fun mostly :)
      */
-    public static int noLookupCodePointCountSwitch(BytesRef utf8) {
+    public static int countLuceneMod1(BytesRef utf8) {
       int upto = utf8.offset;
       final int limit = utf8.offset + utf8.length;
       final byte[] bytes = utf8.bytes;
@@ -203,13 +202,56 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
       return codePointCount;
     }
 
+    static byte[] utf8CodeLength = new byte[] {
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+      2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+      3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+      4, 4, 4, 4, 4, 4, 4, 4 //, 5, 5, 5, 5, 6, 6, 0, 0
+    };
+
+    /** Returns the number of code points in this utf8
+     *  sequence.  Behavior is undefined if the utf8 sequence
+     *  is invalid.*/
+    public static int codePointCount(BytesRef utf8) {
+      int upto = utf8.offset;
+      final int limit = utf8.offset + utf8.length;
+      final byte[] bytes = utf8.bytes;
+      int codePointCount = 0;
+      
+      int v;
+      while (upto < limit) {
+        codePointCount++;
+        
+        v = bytes[upto] & 0xFF;
+        if (v < 128) {
+            upto++;
+            continue;
+        } else {
+            upto += utf8CodeLength[v];
+        }
+      }
+      return codePointCount;
+    }
+    
     public static void main(String [] args)
     {
         // Sanity check.
         System.out.println("Lucene: " + countLucene(1, DATA_UNICODE));
         System.out.println("Java: " + countJava(1, DATA_UNICODE));
         System.out.println("NoLookup(if): " + noLookupIf(1, DATA_UNICODE));
-        System.out.println("NoLookup(switch): " + noLookupSwitch(1, DATA_UNICODE));
+        System.out.println("LuceneMod1: " + countLuceneMod1(1, DATA_UNICODE));
 
         // Benchmark.
         Runner.main(BenchmarkCodePointCount.class, args);
