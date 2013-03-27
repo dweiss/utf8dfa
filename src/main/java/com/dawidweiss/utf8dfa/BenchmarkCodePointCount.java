@@ -221,11 +221,11 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         }
 
         // Anything not covered above is invalid UTF8.
-        assert false : "Invalid UTF8: " + utf8.toString();
+        assert false;
       }
 
       // Check if we didn't go over the limit on the last character.
-      assert pos <= limit : "Invalid UTF8: " + utf8.toString();
+      assert pos <= limit;
       return codePointCount;
     }
 
