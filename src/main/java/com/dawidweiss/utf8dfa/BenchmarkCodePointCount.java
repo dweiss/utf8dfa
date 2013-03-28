@@ -5,6 +5,7 @@ import java.nio.CharBuffer;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
+import java.util.Locale;
 import java.util.Random;
 
 import org.apache.lucene.util.BytesRef;
@@ -51,7 +52,7 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
             new Random(0xdeadbeef), 1000000 * 100).getBytes(Charsets.UTF_8);
 
     @SuppressWarnings("unused")
-    private volatile int guard;
+    private volatile long guard;
 
     private byte [] data;
     
@@ -66,7 +67,7 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         }
     }
 
-    public int timeCodePointCounting(int reps) throws Exception
+    public long timeCodePointCounting(int reps) throws Exception
     {
         final Implementation impl = implementation;
         switch (impl)
@@ -90,20 +91,20 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         throw new RuntimeException();
     }
 
-    private static int countJava(int reps, byte [] data)
+    private static long countJava(int reps, byte [] data)
     {
-        int codePoints = 0;
+        long codePoints = 0;
         CharsetDecoder decoder = Charsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT);
 
-        ByteBuffer in = ByteBuffer.wrap(data);
         CharBuffer out = CharBuffer.allocate(1024);
         final char[] outArray = out.array();
         out.mark();
 
         for (int i = 0; i < reps; i++)
         {
+            ByteBuffer in = ByteBuffer.wrap(data);
             out.clear();
             while (decoder.decode(in, out, true) == CoderResult.OVERFLOW) {
                 codePoints += Character.codePointCount(outArray, 0, out.position());
@@ -115,9 +116,9 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         return codePoints;
     }
 
-    private static int countLucene(int reps, byte [] data)
+    private static long countLucene(int reps, byte [] data)
     {
-        int codePoints = 0;
+        long codePoints = 0;
         BytesRef bref = new BytesRef(data);
         for (int i = 0; i < reps; i++)
         {
@@ -126,9 +127,9 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         return codePoints;
     }
 
-    private static int noLookupIf(int reps, byte [] data)
+    private static long noLookupIf(int reps, byte [] data)
     {
-        int codePoints = 0;
+        long codePoints = 0;
         BytesRef bref = new BytesRef(data);
         for (int i = 0; i < reps; i++)
         {
@@ -137,9 +138,9 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
         return codePoints;
     }
 
-    private static int countLuceneMod1(int reps, byte [] data)
+    private static long countLuceneMod1(int reps, byte [] data)
     {
-        int codePoints = 0;
+        long codePoints = 0;
         BytesRef bref = new BytesRef(data);
         for (int i = 0; i < reps; i++)
         {
@@ -149,9 +150,9 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
     }
 
 
-    private static int countNoCount(int reps, byte [] data)
+    private static long countNoCount(int reps, byte [] data)
     {
-        int codePoints = 0;
+        long codePoints = 0;
         for (int i = 0; i < reps; i++)
         {
             for (int j = 0; j < data.length; j++) {
@@ -164,7 +165,7 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
     /**
      * No lookup array, if sequence. 
      */
-    public static int noLookupCodePointCount(BytesRef utf8) {
+    public static long noLookupCodePointCount(BytesRef utf8) {
       int upto = utf8.offset;
       final int limit = utf8.offset + utf8.length;
       final byte[] bytes = utf8.bytes;
@@ -229,9 +230,28 @@ public class BenchmarkCodePointCount extends SimpleBenchmark
       return codePointCount;
     }
 
-    public static void main(String [] args)
+    public static void main(String [] args) throws Exception
     {
         // Sanity check.
+        for (DataType dt : DataType.values()) {
+            for (Implementation i : Implementation.values()) {
+                BenchmarkCodePointCount c = new BenchmarkCodePointCount();
+                c.implementation = i;
+                c.dataType = dt;
+                c.setUp();
+                long s = System.currentTimeMillis();
+                long v = c.timeCodePointCounting(10);
+                long e = System.currentTimeMillis();
+                
+                System.out.println(String.format(Locale.ENGLISH,
+                    "%10.3f <= [%10d] %s %s",
+                    (e - s) / 1000.0,
+                    v,
+                    dt,
+                    i));
+            }
+        }
+
         System.out.println("Lucene: " + countLucene(1, DATA_UNICODE));
         System.out.println("Java: " + countJava(1, DATA_UNICODE));
         System.out.println("NoLookup(if): " + noLookupIf(1, DATA_UNICODE));
